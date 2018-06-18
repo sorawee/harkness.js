@@ -35,23 +35,16 @@ $(function () {
         users.forEach(user => {
             const td = $('<td/>')
                   .text(user)
-                  .click(e => {
-                      update(`:start-log ${user}`);
-                  });
+                  .click(e => update(`:start-log ${user}`));
             ul.append($(`<tr/>`).append(td));
         });
     }
 
     function refreshLogs() {
         clearTr();
-        database.forEach(row => {
-            appendTr(rowToTr(row, false));
-        });
-        if (current != null) {
-            appendTr(rowToTr(currentRow(), true));
-        }
+        database.forEach(row => appendTr(rowToTr(row, false)));
+        if (current != null) appendTr(rowToTr(currentRow(), true));
     }
-
 
     /**
      * @param {Row} row
@@ -61,7 +54,7 @@ $(function () {
         const rowLabel = lastRow ? '*' : row.id;
         function clickEventTd(field, val) {
             return e => {
-                $('#command').typeahead('val', `:edit-log ${rowLabel} ${field} "${val}"`);
+                $('#command').typeahead('val', `:edit-log ${rowLabel} ${field} ${JSON.stringify(val)}`);
                 $('#command').focus();
             };
         }
@@ -86,7 +79,7 @@ $(function () {
         "edit-log",
         "remove-log",
         "start-log",
-        "note"
+        "note",
     ];
 
     function getRowLabels() {
@@ -478,14 +471,7 @@ $(function () {
     $('#command').keyup(e => {
         if (e.keyCode == 13) {
             update($('#command').val());
-            $('#command').typeahead('close');
             $('#command').typeahead('val', '');
-        } else if (e.keyCode == 9) {
-            const val = $('#command').typeahead('val');
-            $('#command').typeahead('close');
-            $('#command').typeahead('val', '');
-            $('#command').typeahead('val', val);
-            $('#command').typeahead('open');
         }
     });
 
