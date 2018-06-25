@@ -249,16 +249,16 @@
     }
 
     function appendTableRow(tr) {
-        $('#app-table-body').append(tr);
+        $('#app-table tbody').append(tr);
     }
 
     /* Precondition: current != null */
     function removeLastRowUnsafe() {
-        $('#app-table-body tr:last').remove();
+        $('#app-table tbody tr:last').remove();
     }
 
     function clearLogTable() {
-        $('#app-table-body').empty();
+        $('#app-table tbody').empty();
     }
 
     function parse(cmd) {
