@@ -1,5 +1,4 @@
 (function () {
-
     /**
      * @typedef Record
      * @type {object}
@@ -44,7 +43,6 @@
 
     let currentId = 1;
 
-
     /*
       All rows in the table come from both `database` and `current`. `current` should always be non-`null` unless
       there's absolutely no rows. As such, `current == null` implies `database.length == 0`
@@ -58,12 +56,12 @@
      * @returns {Record}
      */
 
-    setPopUpTrue();
     function setPopUpTrue(){
       window.onbeforeunload = function(e) {
         e.returnValue = "not Null";
      };
     }
+
     function makeRecord(id, user, duration, note) {
         return {
             id: id,
@@ -350,6 +348,7 @@
                 if (current != null) {
                     const record = getCurrentRecordUnsafe();
                     database.push(record);
+                    setPopUpTrue();
                     currentId++;
                     removeLastRowUnsafe();
                     appendTableRow(recordToRow(record));
@@ -549,14 +548,13 @@
 
     $('#file-save').click(e => {
         log('Save requested');
-
         const saver = $('#file-save');
         saver.attr('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(
             Papa.unparse(users.map(user => makeRecord(-1, user, 0, '')).concat(getFreshDatabase()))
         ));
-        window.onbeforeunload = function(e) {
-       };
-       setTimeout(setPopUpTrue, 20000);
+
+        window.onbeforeunload = function(e){};
+        setTimeout(setPopUpTrue, 20000);
         saver.attr('download', 'harkness-log.csv');
     });
 
