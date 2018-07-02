@@ -55,6 +55,13 @@
      * @param {string} note
      * @returns {Record}
      */
+
+    function setPopUpTrue(){
+      window.onbeforeunload = function(e) {
+        e.returnValue = "not Null";
+     };
+    }
+
     function makeRecord(id, user, duration, note) {
         return {
             id: id,
@@ -341,6 +348,7 @@
                 if (current != null) {
                     const record = getCurrentRecordUnsafe();
                     database.push(record);
+                    setPopUpTrue();
                     currentId++;
                     removeLastRowUnsafe();
                     appendTableRow(recordToRow(record));
@@ -544,6 +552,9 @@
         saver.attr('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(
             Papa.unparse(users.map(user => makeRecord(-1, user, 0, '')).concat(getFreshDatabase()))
         ));
+
+        window.onbeforeunload = function(e){};
+        setTimeout(setPopUpTrue, 20000);
         saver.attr('download', 'harkness-log.csv');
     });
 
