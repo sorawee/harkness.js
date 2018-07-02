@@ -744,4 +744,53 @@
         d3eval();
     });
 
+    google.charts.load('current', {packages: ['corechart', 'bar']});
+    google.charts.setOnLoadCallback(setupGoogleCharts);
+
+    function setupGoogleCharts() {
+      const chart = new google.visualization.ColumnChart(document.getElementById('chartDiv'));
+
+      function drawColColors() {
+        const spentTime = {};
+        for (const user of users) {
+          spentTime[user] = 0;
+        }
+
+        let maxValue = 0;
+
+        for (const record of getFreshDatabase()) {
+          spentTime[record.user] += record.duration;
+          maxValue = Math.max(spentTime[record.user], maxValue);
+        }
+
+        const data = new google.visualization.DataTable();
+        data.addColumn('string', 'User');
+        data.addColumn('number', 'Total time');
+        data.addRows(users.map(user => [user, spentTime[user]]));
+
+        const options = {
+          title: 'Aggregated time',
+          hAxis: {
+            title: 'User',
+          },
+          vAxis: {
+            title: 'Number of times spoken',
+            gridlines: {count: -1},
+            minValue: 0,
+          },
+          width: 700,
+          legend: {
+            position: 'none'
+          }
+        };
+
+        if (maxValue < 2) {
+          options.vAxis.maxValue = 2;
+        }
+
+        chart.draw(data, options);
+      }
+
+      $('#chart-tab').click(drawColColors);
+    }
 })();
