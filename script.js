@@ -39,14 +39,18 @@
 
     let users = [];
 
+    const topics = [];
+
+    const mapTopicColor = {}; //map a topic to its hue number, not the color
+
+    let lastestHue = null;
+
     /** @type {Current} */
     let current = null;
 
     let database = [];
 
     let currentId = 1;
-
-    let topics = [];
 
     let currentTopic = '';
 
@@ -271,6 +275,28 @@
 
     function appendTableRow(tr) {
         $('#app-table tbody').append(tr);
+        colorTopicCells();
+    }
+
+    function colorTopicCells() {
+      $('#app-table tbody tr').each(function(index) {
+          const topicCell = $(this).find('td:eq(2)');
+          const text = topicCell.text();
+          topicCell.css('background-color', `hsl(${mapTopicColor[text]}, 50%, 81%)` );
+      });
+    }
+
+    function addNewTopic(topic) {
+      if (lastestHue == null) {
+        lastestHue = 180;
+      }
+      mapTopicColor[topic] = lastestHue;
+      lastestHue += 137;
+      if (lastestHue > 360) {
+        lastestHue -= 360;
+      }
+      topics.push(topic);
+      log(`Topic ${topic} is added.`);
     }
 
     /* Precondition: current != null */
@@ -453,6 +479,14 @@
                 rowObj.note = val;
             } break;
 
+            case 'topic': {
+                if (! topics.includes(val)) {
+                  addNewTopic(val);
+                  log(`Topic ${val} is added.`);
+                }
+                rowObj.topic = val;
+            } break;
+
             default:
                 log(`Unknown subcommand: ${field}`);
                 return;
@@ -523,6 +557,8 @@
           if (badArity(arity.LE(1))) return;
           const topic = args[0];
 
+          // for a bug when topic is empty (need improvement)
+          if (topic == undefined) return;
 
           function startNewTopic() {
             const pastTopic = currentTopic
@@ -547,8 +583,7 @@
             startNewTopic();
             return;
           }
-          topics.push(topic);
-          log(`Topic ${topic} is added.`);
+          addNewTopic(topic);
           startNewTopic();
         } break;
 
