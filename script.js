@@ -41,7 +41,9 @@
 
     const topics = [];
 
-    const mapTopicColor = {}; //map a topic to its hue number, not the color
+    // map a topic to its hue number, not its color
+    // if the topic is undefined (''), color it black manually as there is no specific hue for black
+    const mapTopicColor = {};
 
     let lastestHue = null;
 
@@ -282,7 +284,12 @@
       $('#app-table tbody tr').each(function(index) {
           const topicCell = $(this).find('td:eq(2)');
           const text = topicCell.text();
-          topicCell.css('background-color', `hsl(${mapTopicColor[text]}, 50%, 81%)` );
+          const hue = mapTopicColor[text];
+          if (hue == null) {
+            topicCell.css('background-color', `black` );
+            return;
+          }
+          topicCell.css('background-color', `hsl(${hue}, 70%, 81%)` );
       });
     }
 
@@ -556,9 +563,6 @@
         case 'new-topic': {
           if (badArity(arity.LE(1))) return;
           const topic = args[0];
-
-          // for a bug when topic is empty (need improvement)
-          if (topic == undefined) return;
 
           function startNewTopic() {
             const pastTopic = currentTopic
