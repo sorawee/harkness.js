@@ -5,6 +5,7 @@
      * @property {number} id
      * @property {string} user
      * @property {number} duration
+     * @property {string} topic
      * @property {string} note
      */
 
@@ -15,6 +16,7 @@
      * @property {number} duration
      * @property {string} note
      * @property {?number} latestStartTime
+     * @property {string} topic
      */
 
 
@@ -30,11 +32,20 @@
         'add-users',
         'delete-users',
         'note',
+        'new-topic',
     ];
 
     /* Variables */
 
     let users = [];
+
+    const topics = [];
+
+    // map a topic to its hue number, not its color
+    // if the topic is undefined (''), color it black manually as there is no specific hue for black
+    const mapTopicColor = {};
+
+    let lastestHue = null;
 
     /** @type {Current} */
     let current = null;
@@ -43,18 +54,12 @@
 
     let currentId = 1;
 
+    let currentTopic = '';
+
     /*
       All rows in the table come from both `database` and `current`. `current` should always be non-`null` unless
       there's absolutely no rows. As such, `current == null` implies `database.length == 0`
     */
-
-    /**
-     * @param {number} id
-     * @param {string} user
-     * @param {number} duration
-     * @param {string} note
-     * @returns {Record}
-     */
 
     function setPopUpTrue(){
       window.onbeforeunload = function(e) {
@@ -62,10 +67,19 @@
      };
     }
 
-    function makeRecord(id, user, duration, note) {
+    /**
+     * @param {number} id
+     * @param {string} user
+     * @param {number} duration
+     * @param {string} note
+     * @param {string} topic
+     * @returns {Record}
+     */
+    function makeRecord(id, user, topic, duration, note) {
         return {
             id: id,
             user: user,
+            topic: topic,
             duration: duration,
             note: note,
         };
@@ -102,6 +116,10 @@
                 target: getLabels
             },
             {
+                pattern: ':new-topic ',
+                target: () => topics
+            },
+            {
                 pattern: ':',
                 target: () => COMMANDS
             },
@@ -130,10 +148,11 @@
         return Math.floor(Date.now() / 1000);
     }
 
-    function setCurrent(id, user, duration, latestStartTime, note) {
+    function setCurrent(id, user, topic, duration, latestStartTime, note) {
         current = {
             id: id,
             user: user,
+            topic: topic,
             duration: duration,
             latestStartTime: latestStartTime,
             note: note
@@ -157,7 +176,7 @@
         if (current == null) return;
         if (database.length > 0) {
             const lastRow = database.pop();
-            setCurrent(lastRow.id, lastRow.user, lastRow.duration, null, lastRow.note);
+            setCurrent(lastRow.id, lastRow.user, lastRow.topic, lastRow.duration, null, lastRow.note);
             currentId = lastRow.id;
         } else {
             current = null;
@@ -172,7 +191,7 @@
 
     /* Precondition: current != null */
     function getCurrentRecordUnsafe() {
-        return makeRecord(current.id, current.user, getCurrentDurationUnsafe(), current.note);
+        return makeRecord(current.id, current.user, current.topic, getCurrentDurationUnsafe(), current.note);
     }
 
     /* Precondition: current != null */
@@ -226,6 +245,7 @@
         const tr = $('<tr/>')
               .append($('<td/>').text(record.id))
               .append($('<td/>').text(record.user).click(clickEvent('user', record.user)))
+              .append($('<td/>').text(record.topic).click(clickEvent('topic', record.topic)))
               .append($('<td/>').text(durationToString(record.duration)).click(clickEvent('duration', record.duration)))
               .append($('<td/>').text(record.note).click(clickEvent('note', record.note)));
         if (current != null && record.id == currentId && current.latestStartTime != null) {
@@ -257,6 +277,33 @@
 
     function appendTableRow(tr) {
         $('#app-table tbody').append(tr);
+        colorTopicCells();
+    }
+
+    function colorTopicCells() {
+      $('#app-table tbody tr').each(function(index) {
+          const topicCell = $(this).find('td:eq(2)');
+          const text = topicCell.text();
+          const hue = mapTopicColor[text];
+          if (hue == null) {
+            topicCell.css('background-color', `black` );
+            return;
+          }
+          topicCell.css('background-color', `hsl(${hue}, 70%, 81%)` );
+      });
+    }
+
+    function addNewTopic(topic) {
+      if (lastestHue == null) {
+        lastestHue = 180;
+      }
+      mapTopicColor[topic] = lastestHue;
+      lastestHue += 137;
+      if (lastestHue > 360) {
+        lastestHue -= 360;
+      }
+      topics.push(topic);
+      log(`Topic ${topic} is added.`);
     }
 
     /* Precondition: current != null */
@@ -354,7 +401,7 @@
                     appendTableRow(recordToRow(record));
                     log(`User ${current.user} finishes after ${durationToString(record.duration)}`);
                 }
-                setCurrent(currentId, user, 0, getCurrentSec(), '');
+                setCurrent(currentId, user, currentTopic, 0, getCurrentSec(), '');
                 appendTableRow(recordToRow(getCurrentRecordUnsafe()));
             }
             scrollLog();
@@ -439,6 +486,14 @@
                 rowObj.note = val;
             } break;
 
+            case 'topic': {
+                if (! topics.includes(val)) {
+                  addNewTopic(val);
+                  log(`Topic ${val} is added.`);
+                }
+                rowObj.topic = val;
+            } break;
+
             default:
                 log(`Unknown subcommand: ${field}`);
                 return;
@@ -446,6 +501,7 @@
 
             if (target == current.id) {
                 current.user = rowObj.user;
+                current.topic = rowObj.topic;
                 current.duration = rowObj.duration;
                 current.note = rowObj.note;
                 if (field == 'duration' && current.latestStartTime != null) {
@@ -504,6 +560,37 @@
             refreshUsers(); // could be more efficient, but we don't care here
         } break;
 
+        case 'new-topic': {
+          if (badArity(arity.LE(1))) return;
+          const topic = args[0];
+
+          function startNewTopic() {
+            const pastTopic = currentTopic
+            currentTopic = topic;
+            log(`Start topic ${topic}`)
+
+            if (current != null) {
+              const record = getCurrentRecordUnsafe();
+              database.push(record);
+              currentId++;
+              removeLastRowUnsafe();
+              appendTableRow(recordToRow(record));
+              log(`User ${current.user} finishes talking about ${pastTopic} after ${durationToString(record.duration)}`);
+              setCurrent(currentId, current.user, currentTopic, 0, getCurrentSec(), '');
+              appendTableRow(recordToRow(getCurrentRecordUnsafe()));
+            }
+          }
+
+
+          if (topics.includes(topic)) {
+            log(`Topic ${topic} already exists. Skipped.`);
+            startNewTopic();
+            return;
+          }
+          addNewTopic(topic);
+          startNewTopic();
+        } break;
+
         default:
             log(`Unknown command: ${mode}`);
             return;
@@ -550,9 +637,8 @@
         log('Save requested');
         const saver = $('#file-save');
         saver.attr('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(
-            Papa.unparse(users.map(user => makeRecord(-1, user, 0, '')).concat(getFreshDatabase()))
+            Papa.unparse(users.map(user => makeRecord(-1, user, '', 0, '')).concat(getFreshDatabase()))
         ));
-
         window.onbeforeunload = function(e){};
         setTimeout(setPopUpTrue, 20000);
         saver.attr('download', 'harkness-log.csv');
@@ -584,7 +670,7 @@
 
         // this is so that we can call popRecordAndRow
         // which will set everything up
-        setCurrent(0, '', 0, null, '');
+        setCurrent(0, '', '', 0, null, '');
         appendTableRow(recordToRow(getCurrentRecordUnsafe()));
         popRecordAndRow();
 
