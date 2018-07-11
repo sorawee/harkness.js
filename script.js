@@ -42,10 +42,10 @@
     const topics = [];
 
     // map a topic to its hue number, not its color
-    // if the topic is undefined (''), color it black manually as there is no specific hue for black
     const mapTopicColor = {};
+    mapTopicColor[null] = 0;
 
-    let lastestHue = null;
+    let lastestHue = 0;
 
     /** @type {Current} */
     let current = null;
@@ -285,23 +285,19 @@
           const topicCell = $(this).find('td:eq(2)');
           const text = topicCell.text();
           const hue = mapTopicColor[text];
-          if (hue == null) {
-            topicCell.css('background-color', `black` );
-            return;
+          if (text != null && hue == null) {
+            addNewTopic(text);
           }
           topicCell.css('background-color', `hsl(${hue}, 70%, 81%)` );
       });
     }
 
     function addNewTopic(topic) {
-      if (lastestHue == null) {
-        lastestHue = 180;
-      }
-      mapTopicColor[topic] = lastestHue;
       lastestHue += 137;
       if (lastestHue > 360) {
         lastestHue -= 360;
       }
+      mapTopicColor[topic] = lastestHue;
       topics.push(topic);
       log(`Topic ${topic} is added.`);
     }
@@ -684,7 +680,7 @@
     });
 
 
-    function d3eval() {
+    function d3eval(inputData) {
         const b = 300;
         const a = 100;
         var diameter = 400,
@@ -814,27 +810,22 @@
         }
 
         const mapUsers = {};
-        const freshData = getFreshDatabase();
         for (const user of users) {
             mapUsers[user] = [];
         }
-        for (let i = 0; i < freshData.length - 1; i++) {
-            if (freshData[i].user == freshData[i + 1].user) continue;
-            mapUsers[freshData[i].user].push(freshData[i + 1].user);
+        for (let i = 0; i < inputData.length - 1; i++) {
+            if (inputData[i].user == inputData[i + 1].user) continue;
+            mapUsers[inputData[i].user].push(inputData[i + 1].user);
         }
         load(users.map(e => ({name: e, links: mapUsers[e]})));
-    }
+    };
 
-    $('#viz-tab').click(e => {
-        $('#vizDiv').empty();
-        d3eval();
-    });
-
-    google.charts.load('current', {packages: ['corechart', 'bar']});
+    google.charts.load('current', {packages: ['corechart', 'bar', 'timeline']});
     google.charts.setOnLoadCallback(setupGoogleCharts);
 
     function setupGoogleCharts() {
       const chart = new google.visualization.ColumnChart(document.getElementById('chartDiv'));
+      const timeline = new google.visualization.Timeline(document.getElementById('vizTimeline'));
 
       function drawColColors() {
         const spentTime = {};
@@ -878,5 +869,123 @@
       }
 
       $('#chart-tab').click(drawColColors);
+
+      function drawVizTimeline(freshData) {
+        const time_by_topic = [];
+        let cur_time = 0;
+        const hue_by_time = [];
+
+        function makeTopicRecordByTime(topic, start, end, id) {
+          return {
+            topic: topic,
+            start: start * 10,
+            end: end * 10,
+            id: [id],
+          };
+        }
+
+        function addNewTopic(record) {
+          time_by_topic.push(makeTopicRecordByTime(record.topic, cur_time, cur_time + record.duration, record.id));
+          cur_time += record.duration;
+          hue_by_time.push(mapTopicColor[record.topic]);
+        }
+        for (const record of freshData) {
+          if (time_by_topic.length == 0) {
+            addNewTopic(record);
+            continue;
+          }
+          const last_record = time_by_topic.pop();
+          if (record.topic != last_record.topic) {
+            time_by_topic.push(last_record);
+            addNewTopic(record);
+            continue;
+          }
+          last_record.end += (record.duration * 10);
+          last_record.id.push(record.id);
+          time_by_topic.push(last_record);
+          cur_time += record.duration;
+        }
+
+        const dataTable = new google.visualization.DataTable();
+        dataTable.addColumn({ type: 'string', id: 'Topic' });
+        dataTable.addColumn({ type: 'string', id: 'Name' });
+        dataTable.addColumn({ type: 'number', id: 'Start' });
+        dataTable.addColumn({ type: 'number', id: 'End' });
+        dataTable.addRows(time_by_topic.map(record => ['Topic', record.topic, record.start, record.end]));
+
+        const options = {
+          title: 'Timeline by Topics',
+          height: 100,
+          width: 700,
+          colors: hue_by_time.map(hue => `${hslToHex(hue, 70, 81)}`),
+          timeline: { showRowLabels: false },
+        };
+        timeline.draw(dataTable, options);
+        google.visualization.events.addListener(timeline, 'select', timelineSelectHandler);
+
+        function timelineSelectHandler(e) {
+          const item = timeline.getSelection();
+          const start = dataTable.getValue(item[0].row, 2);
+          const id = time_by_topic[time_by_topic.findIndex(record => record.start == start)].id;
+          let last_id = id[id.length-1];
+          let first_id = id[0]-1;
+          if (last_id > database.length) last_id = null;
+          if (first_id < 0) first_id = null;
+
+          function getGraph(data) {
+            $('#vizDiv').empty();
+            d3eval(data);
+          }
+
+          if (first_id == null && last_id == null) return;
+          if (first_id == null) {
+            getGraph(database.slice(id.length-database.length));
+            return;
+          }
+          if (last_id == null) {
+            getGraph(database.slice(first_id));
+            return;
+          }
+          getGraph(database.slice(first_id, last_id));
+        }
+
+      }
+
+
+      $('#viz-tab').click(e => {
+          const freshData = getFreshDatabase();
+          $('#vizDiv').empty();
+          d3eval(freshData);
+          drawVizTimeline(freshData);
+      });
+    }
+
+    function hslToHex(h, s, l) {
+      h /= 360;
+      s /= 100;
+      l /= 100;
+      let r, g, b;
+      if (s === 0) {
+        r = g = b = l; // achromatic
+      } else {
+        const hue2rgb = (p, q, t) => {
+          if (t < 0) t += 1;
+          if (t > 1) t -= 1;
+          if (t < 1 / 6) return p + (q - p) * 6 * t;
+          if (t < 1 / 2) return q;
+          if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+          return p;
+        };
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1 / 3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1 / 3);
+      }
+      const toHex = x => {
+        const hex = Math.round(x * 255).toString(16);
+        return hex.length === 1 ? '0' + hex : hex;
+      };
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
     }
 })();
