@@ -245,7 +245,7 @@
         const tr = $('<tr/>')
               .append($('<td/>').text(record.id))
               .append($('<td/>').text(record.user).click(clickEvent('user', record.user)))
-              .append($('<td/>').text(record.topic).click(clickEvent('topic', record.topic)))
+              .append($('<td/>').text(record.topic).click(clickEvent('topic', record.topic)).css('background-color', `hsl(${mapTopicColor[record.topic]}, 70%, 81%)`))
               .append($('<td/>').text(durationToString(record.duration)).click(clickEvent('duration', record.duration)))
               .append($('<td/>').text(record.note).click(clickEvent('note', record.note)));
         if (current != null && record.id == currentId && current.latestStartTime != null) {
@@ -277,29 +277,12 @@
 
     function appendTableRow(tr) {
         $('#app-table tbody').append(tr);
-        colorTopicCells();
-    }
-
-    function colorTopicCells() {
-      $('#app-table tbody tr').each(function(index) {
-          const topicCell = $(this).find('td:eq(2)');
-          const text = topicCell.text();
-          const hue = mapTopicColor[text];
-          if (text != null && hue == null) {
-            addNewTopic(text);
-          }
-          topicCell.css('background-color', `hsl(${hue}, 70%, 81%)` );
-      });
     }
 
     function addNewTopic(topic) {
       lastestHue += 137;
-      if (lastestHue > 360) {
-        lastestHue -= 360;
-      }
-      mapTopicColor[topic] = lastestHue;
+      mapTopicColor[topic] = lastestHue%360;
       topics.push(topic);
-      log(`Topic ${topic} is added.`);
     }
 
     /* Precondition: current != null */
@@ -584,6 +567,7 @@
             return;
           }
           addNewTopic(topic);
+          log(`Topic ${topic} is added.`);
           startNewTopic();
         } break;
 
@@ -655,6 +639,9 @@
         clearLogTable();
         for (const record of data.data) {
             // TODO: this should log an error message if it errors
+            if (! topics.includes(record.topic)) {
+              addNewTopic(record.topic);
+            }
             record.duration = Number(record.duration);
             if (record.id == -1) {
                 users.push(record.user);
@@ -900,7 +887,7 @@
           return n * 1000;
         }
 
-        function addNewTopic(record) {
+        function addNewTopicForViz(record) {
           time_by_topic.push(makeTopicRecordByTime(record.topic, numToSecond(cur_time), numToSecond(cur_time + record.duration), record.id));
           cur_time += record.duration;
           hue_by_time.push(mapTopicColor[record.topic]);
@@ -908,13 +895,13 @@
 
         for (const record of freshData) {
           if (time_by_topic.length == 0) {
-            addNewTopic(record);
+            addNewTopicForViz(record);
             continue;
           }
           const last_record = time_by_topic.pop();
           if (record.topic != last_record.topic) {
             time_by_topic.push(last_record);
-            addNewTopic(record);
+            addNewTopicForViz(record);
             continue;
           }
           last_record.end += numToSecond(record.duration);
