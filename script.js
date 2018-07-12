@@ -830,23 +830,32 @@
       function drawColColors() {
         const spentTime = {};
         for (const user of users) {
-          spentTime[user] = 0;
+          spentTime[user] = {};
+          for (const topic of topics) {
+            (spentTime[user])[topic] = 0;
+          }
+          (spentTime[user]).total = 0;
         }
 
         let maxValue = 0;
 
         for (const record of getFreshDatabase()) {
-          spentTime[record.user] += record.duration;
-          maxValue = Math.max(spentTime[record.user], maxValue);
+          (spentTime[record.user])[record.topic] += record.duration;
+          (spentTime[record.user]).total += record.duration;
+          maxValue = Math.max(spentTime[record.user].total, maxValue);
         }
 
         const data = new google.visualization.DataTable();
         data.addColumn('string', 'User');
-        data.addColumn('number', 'Total time');
-        data.addRows(users.map(user => [user, spentTime[user]]));
+        for (const topic of topics) {
+          data.addColumn('number', `${topic}`);
+        }
+        data.addColumn({ type: 'string', id: 'Total Time', role: 'annotation' });
+        data.addRows(users.map(user => [user].concat(topics.map(topic => (spentTime[user])[topic])).concat([`${(spentTime[user]).total} s`])));
 
         const options = {
-          title: 'Aggregated time',
+          isStacked: true,
+          title: 'Aggregated time, in seconds',
           hAxis: {
             title: 'User',
           },
@@ -856,9 +865,12 @@
             minValue: 0,
           },
           width: 700,
+          height: 400,
           legend: {
-            position: 'none'
-          }
+            position: 'bottom',
+            maxLines: 3,
+          },
+          colors: topics.map(topic => `${hslToHex(mapTopicColor[topic], 70, 81)}`),
         };
 
         if (maxValue < 2) {
@@ -878,17 +890,22 @@
         function makeTopicRecordByTime(topic, start, end, id) {
           return {
             topic: topic,
-            start: start * 10,
-            end: end * 10,
+            start: start,
+            end: end,
             id: [id],
           };
         }
 
+        function numToSecond(n) {
+          return n * 1000;
+        }
+
         function addNewTopic(record) {
-          time_by_topic.push(makeTopicRecordByTime(record.topic, cur_time, cur_time + record.duration, record.id));
+          time_by_topic.push(makeTopicRecordByTime(record.topic, numToSecond(cur_time), numToSecond(cur_time + record.duration), record.id));
           cur_time += record.duration;
           hue_by_time.push(mapTopicColor[record.topic]);
         }
+
         for (const record of freshData) {
           if (time_by_topic.length == 0) {
             addNewTopic(record);
@@ -900,7 +917,7 @@
             addNewTopic(record);
             continue;
           }
-          last_record.end += (record.duration * 10);
+          last_record.end += numToSecond(record.duration);
           last_record.id.push(record.id);
           time_by_topic.push(last_record);
           cur_time += record.duration;
